@@ -19,8 +19,7 @@ export default function AdminLoginPage() {
     })
     const data = await res.json()
     if (data.ok) {
-      router.push('/admin/orders')
-      router.refresh()
+      window.location.href = '/admin/orders'
     } else {
       setError('密碼錯誤，請重試')
     }
