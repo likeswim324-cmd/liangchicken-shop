@@ -50,12 +50,16 @@ export default function CheckoutPage() {
   const [form, setForm] = useState({ name: '', phone: '', address: '', note: '' })
   const [loading, setLoading] = useState(false)
 
+  const [hydrated, setHydrated] = useState(false)
+
   // 會員相關
   const [isNewMember, setIsNewMember] = useState(false)
   const [birthday, setBirthday] = useState('')
   const [referralCode, setReferralCode] = useState('')
   const [credits, setCredits] = useState<Credit[]>([])
   const [selectedCreditIds, setSelectedCreditIds] = useState<string[]>([])
+
+  useEffect(() => { setHydrated(true) }, [])
 
   // 擷取推薦碼（從 URL 或 localStorage）
   useEffect(() => {
@@ -94,10 +98,11 @@ export default function CheckoutPage() {
       .then(data => setCredits(data.credits ?? []))
   }, [profile])
 
-  if (items.length === 0) {
+  if (hydrated && items.length === 0) {
     router.replace('/products')
     return null
   }
+  if (!hydrated) return null
 
   const subtotal = totalPrice()
   const freeShip = subtotal >= FREE_SHIPPING
