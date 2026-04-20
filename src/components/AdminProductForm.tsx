@@ -15,6 +15,7 @@ type ProductFormData = {
   image: string
   category: string
   inStock: boolean
+  featured?: boolean
   options?: ProductOption[]
 }
 
@@ -159,6 +160,11 @@ export default function AdminProductForm({ initial }: { initial?: ProductFormDat
           <input type="checkbox" checked={form.inStock} onChange={(e) => setForm({ ...form, inStock: e.target.checked })}
             className="accent-amber-500 w-4 h-4" />
           <span className="text-sm text-gray-700">上架販售中</span>
+        </label>
+        <label className="flex items-center gap-2 cursor-pointer">
+          <input type="checkbox" checked={form.featured ?? false} onChange={(e) => setForm({ ...form, featured: e.target.checked })}
+            className="accent-amber-500 w-4 h-4" />
+          <span className="text-sm text-gray-700">⭐ 顯示在首頁精選</span>
         </label>
       </div>
 

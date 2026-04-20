@@ -1,9 +1,10 @@
 import Link from 'next/link'
-import { products } from '@/lib/products'
 import ProductCard from '@/components/ProductCard'
+import productsData from '@/data/products.json'
+import type { Product } from '@/lib/products'
 
 export default function HomePage() {
-  const featured = products.slice(0, 3)
+  const featured = (productsData as Product[]).filter(p => p.featured).slice(0, 6)
 
   return (
     <div className="bg-white">

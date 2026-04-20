@@ -15,6 +15,7 @@ async function sbUpdate(id: string, body: Record<string, unknown>) {
   if ('inStock' in body) payload.in_stock = body.inStock
   if ('options' in body) payload.options = body.options
   if ('fullDescription' in body) payload.full_description = body.fullDescription
+  if ('featured' in body) payload.featured = body.featured
 
   const res = await fetch(`${SUPABASE_URL}/rest/v1/products?id=eq.${id}`, {
     method: 'PATCH',

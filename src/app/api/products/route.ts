@@ -12,6 +12,7 @@ export type Product = {
   image: string
   category: string
   inStock: boolean
+  featured?: boolean
   options: { label: string; choices: string[]; required: boolean }[]
   fullDescription?: string
 }
@@ -29,6 +30,7 @@ async function sbGetProducts(): Promise<Product[]> {
     image: r.image,
     category: r.category,
     inStock: r.in_stock,
+    featured: r.featured ?? false,
     options: r.options,
     fullDescription: r.full_description ?? '',
   }))
@@ -47,6 +49,7 @@ async function sbInsertProduct(product: Omit<Product, 'id'> & { id: string }) {
       image: product.image,
       category: product.category,
       in_stock: product.inStock,
+      featured: product.featured ?? false,
       options: product.options,
       full_description: product.fullDescription ?? '',
     }),

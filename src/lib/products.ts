@@ -14,6 +14,7 @@ export type Product = {
   image: string
   category: string
   inStock: boolean
+  featured?: boolean
   options?: ProductOption[]   // 選填，沒有就不顯示
 }
 
