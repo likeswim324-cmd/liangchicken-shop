@@ -30,15 +30,67 @@ async function sbGetOrders(): Promise<Order[]> {
   }))
 }
 
-async function sbInsertOrder(order: Order) {
+async function sbInsertOrder(order: Order & { line_user_id?: string }) {
   await fetch(`${SUPABASE_URL}/rest/v1/orders`, {
     method: 'POST',
     headers: sbHeaders(),
     body: JSON.stringify({
       id: order.id, created_at: order.createdAt, status: order.status,
-      customer: order.customer, items: order.items, payment: order.payment, shipping: order.shipping, total: order.total,
+      customer: order.customer, items: order.items, payment: order.payment,
+      shipping: order.shipping, total: order.total,
+      line_user_id: order.line_user_id ?? null,
     }),
   })
+}
+
+async function issueCredit(line_user_id: string, type: string, amount: number, days: number) {
+  const expires_at = new Date(Date.now() + days * 86400_000).toISOString()
+  await fetch(`${SUPABASE_URL}/rest/v1/member_credits`, {
+    method: 'POST',
+    headers: { ...sbHeaders(), Prefer: 'return=minimal' },
+    body: JSON.stringify({ line_user_id, type, amount, expires_at }),
+  })
+}
+
+async function handleMemberCredits(line_user_id: string, orderId: string, used_credit_ids: string[]) {
+  // 標記已使用的點數
+  if (used_credit_ids.length > 0) {
+    const used_at = new Date().toISOString()
+    for (const id of used_credit_ids) {
+      await fetch(`${SUPABASE_URL}/rest/v1/member_credits?id=eq.${id}`, {
+        method: 'PATCH',
+        headers: sbHeaders(),
+        body: JSON.stringify({ used: true, used_at, order_id: orderId }),
+      })
+    }
+  }
+
+  // 確認是否為第一筆訂單，且推薦獎金尚未發放
+  const mRes = await fetch(
+    `${SUPABASE_URL}/rest/v1/members?line_user_id=eq.${encodeURIComponent(line_user_id)}&select=referred_by,referral_credited`,
+    { headers: sbHeaders() }
+  )
+  const members = await mRes.json()
+  const member = members[0]
+  if (!member || member.referral_credited) return
+
+  // 查此用戶先前訂單數（不含本次）
+  const oRes = await fetch(
+    `${SUPABASE_URL}/rest/v1/orders?line_user_id=eq.${encodeURIComponent(line_user_id)}&id=neq.${orderId}&select=id`,
+    { headers: sbHeaders() }
+  )
+  const prevOrders = await oRes.json()
+  if (!Array.isArray(prevOrders) || prevOrders.length > 0) return
+
+  // 第一筆訂單：發推薦獎金
+  if (member.referred_by) {
+    await issueCredit(line_user_id, 'referral', 50, 30)
+    await issueCredit(member.referred_by, 'referral', 50, 30)
+  }
+  await fetch(
+    `${SUPABASE_URL}/rest/v1/members?line_user_id=eq.${encodeURIComponent(line_user_id)}`,
+    { method: 'PATCH', headers: sbHeaders(), body: JSON.stringify({ referral_credited: true }) }
+  )
 }
 
 // ── 本機開發：JSON 檔案 ──────────────────────────────────────
@@ -56,7 +108,7 @@ export async function POST(req: Request) {
   const body = await req.json()
   const orderId = `LC${Date.now()}`
 
-  const order: Order = {
+  const order: Order & { line_user_id?: string } = {
     id: orderId,
     createdAt: new Date().toISOString(),
     status: 'pending',
@@ -71,10 +123,14 @@ export async function POST(req: Request) {
     payment: body.payment,
     shipping: body.shipping ?? 'frozen',
     total: body.total,
+    line_user_id: body.line_user_id ?? undefined,
   }
 
   if (SUPABASE_URL && SUPABASE_KEY) {
     await sbInsertOrder(order)
+    if (body.line_user_id) {
+      await handleMemberCredits(body.line_user_id, orderId, body.used_credit_ids ?? [])
+    }
   } else {
     const orders = readOrders()
     orders.unshift(order)

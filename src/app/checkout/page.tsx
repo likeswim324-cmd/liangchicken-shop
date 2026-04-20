@@ -6,6 +6,7 @@ import Link from 'next/link'
 import { useLiff } from '@/lib/useLiff'
 
 type PaymentMethod = 'linepay' | 'credit' | 'atm' | 'cod'
+type Credit = { id: string; type: 'welcome' | 'birthday' | 'referral'; amount: number; expires_at: string }
 
 const paymentOptions: { id: PaymentMethod; label: string; icon: string; desc: string }[] = [
   { id: 'linepay', label: 'LINE Pay', icon: '💚', desc: '直接在 LINE 完成付款' },
@@ -17,27 +18,80 @@ const paymentOptions: { id: PaymentMethod; label: string; icon: string; desc: st
 const FREE_SHIPPING = 2000
 const SHIPPING_FEE = 120
 
+const CREDIT_LABELS: Record<string, string> = {
+  welcome: '入會禮',
+  birthday: '生日禮',
+  referral: '推薦獎金',
+}
+const CREDIT_MIN: Record<string, number> = {
+  welcome: 500,
+  birthday: 1000,
+  referral: 500,
+}
+
 function getEstimatedDelivery(): string {
   const date = new Date()
   date.setDate(date.getDate() + 3)
-  // 若落在週日，再延一天
   if (date.getDay() === 0) date.setDate(date.getDate() + 1)
   return `${date.getMonth() + 1}月${date.getDate()}日`
+}
+
+function formatExpiry(iso: string) {
+  const d = new Date(iso)
+  return `${d.getMonth() + 1}/${d.getDate()} 到期`
 }
 
 export default function CheckoutPage() {
   const { items, totalPrice, clearCart } = useCartStore()
   const router = useRouter()
   const { profile } = useLiff()
+
   const [payment, setPayment] = useState<PaymentMethod>('linepay')
   const [form, setForm] = useState({ name: '', phone: '', address: '', note: '' })
   const [loading, setLoading] = useState(false)
 
-  // LINE 名字帶入姓名欄（只在欄位是空的時候）
+  // 會員相關
+  const [isNewMember, setIsNewMember] = useState(false)
+  const [birthday, setBirthday] = useState('')
+  const [referralCode, setReferralCode] = useState('')
+  const [credits, setCredits] = useState<Credit[]>([])
+  const [selectedCreditIds, setSelectedCreditIds] = useState<string[]>([])
+
+  // 擷取推薦碼（從 URL 或 localStorage）
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search)
+    const ref = params.get('ref')
+    if (ref) localStorage.setItem('lc_ref', ref)
+    const stored = localStorage.getItem('lc_ref')
+    if (stored) setReferralCode(stored)
+  }, [])
+
+  // LINE 名字帶入姓名欄
   useEffect(() => {
     if (profile?.displayName && !form.name) {
       setForm(f => ({ ...f, name: profile.displayName }))
     }
+  }, [profile])
+
+  // 取得 / 建立會員資料
+  useEffect(() => {
+    if (!profile?.userId) return
+    fetch('/api/members/me', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        line_user_id: profile.userId,
+        display_name: profile.displayName,
+        referred_by_code: referralCode || undefined,
+      }),
+    })
+      .then(r => r.json())
+      .then(data => {
+        if (data.is_new) setIsNewMember(true)
+        return fetch(`/api/members/credits?line_user_id=${profile.userId}`)
+      })
+      .then(r => r.json())
+      .then(data => setCredits(data.credits ?? []))
   }, [profile])
 
   if (items.length === 0) {
@@ -48,21 +102,74 @@ export default function CheckoutPage() {
   const subtotal = totalPrice()
   const freeShip = subtotal >= FREE_SHIPPING
   const shippingFee = freeShip ? 0 : SHIPPING_FEE
-  const grandTotal = subtotal + shippingFee
+  const baseTotal = subtotal + shippingFee
   const estimatedDelivery = getEstimatedDelivery()
+
+  // 計算折抵金額
+  const creditDiscount = credits
+    .filter(c => selectedCreditIds.includes(c.id))
+    .reduce((sum, c) => sum + c.amount, 0)
+  const grandTotal = Math.max(0, baseTotal - creditDiscount)
+
+  // 點數選擇邏輯
+  function toggleCredit(credit: Credit) {
+    const alreadySelected = selectedCreditIds.includes(credit.id)
+    if (alreadySelected) {
+      setSelectedCreditIds(ids => ids.filter(id => id !== credit.id))
+      return
+    }
+    // 入會禮和生日禮互斥
+    const hasWelcome = credits.some(c => c.type === 'welcome' && selectedCreditIds.includes(c.id))
+    const hasBirthday = credits.some(c => c.type === 'birthday' && selectedCreditIds.includes(c.id))
+    if (credit.type === 'welcome' && hasBirthday) return
+    if (credit.type === 'birthday' && hasWelcome) return
+    // 檢查最低消費
+    if (baseTotal < CREDIT_MIN[credit.type]) return
+    setSelectedCreditIds(ids => [...ids, credit.id])
+  }
+
+  function creditDisabled(credit: Credit): { disabled: boolean; reason: string } {
+    if (baseTotal < CREDIT_MIN[credit.type]) {
+      return { disabled: true, reason: `需滿 NT$${CREDIT_MIN[credit.type]}` }
+    }
+    const hasWelcome = credits.some(c => c.type === 'welcome' && selectedCreditIds.includes(c.id))
+    const hasBirthday = credits.some(c => c.type === 'birthday' && selectedCreditIds.includes(c.id))
+    if (credit.type === 'welcome' && hasBirthday) return { disabled: true, reason: '不可與生日禮併用' }
+    if (credit.type === 'birthday' && hasWelcome) return { disabled: true, reason: '不可與入會禮併用' }
+    return { disabled: false, reason: '' }
+  }
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setLoading(true)
     try {
+      // 若新會員有填生日，先更新
+      if (isNewMember && birthday && profile?.userId) {
+        await fetch('/api/members/me', {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ line_user_id: profile.userId, birthday }),
+        })
+      }
+
       const res = await fetch('/api/orders', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ items, form, payment, shipping: 'frozen', total: grandTotal }),
+        body: JSON.stringify({
+          items,
+          form,
+          payment,
+          shipping: 'frozen',
+          total: grandTotal,
+          line_user_id: profile?.userId ?? undefined,
+          used_credit_ids: selectedCreditIds,
+          credit_discount: creditDiscount,
+        }),
       })
       const data = await res.json()
       if (data.ok) {
         clearCart()
+        localStorage.removeItem('lc_ref')
         router.push(`/checkout/success?order=${data.orderId}`)
       }
     } finally {
@@ -105,6 +212,20 @@ export default function CheckoutPage() {
               className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-amber-400 resize-none"
             />
           </div>
+
+          {/* 新會員填生日 */}
+          {isNewMember && (
+            <div className="bg-amber-50 rounded-xl p-3 border border-amber-100">
+              <p className="text-sm font-medium text-amber-800 mb-2">🎉 歡迎加入梁雞商行！填入生日，以後生日月可領 NT$100 生日禮</p>
+              <label className="text-sm text-gray-600 mb-1 block">生日（選填）</label>
+              <input
+                type="date"
+                value={birthday}
+                onChange={(e) => setBirthday(e.target.value)}
+                className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:border-amber-400"
+              />
+            </div>
+          )}
         </div>
 
         {/* 配送資訊 */}
@@ -142,6 +263,43 @@ export default function CheckoutPage() {
           </div>
         </div>
 
+        {/* 會員點數 */}
+        {credits.length > 0 && (
+          <div className="bg-white rounded-2xl p-4 shadow-sm border border-gray-100">
+            <h2 className="font-bold text-gray-700 mb-3">會員點數折抵</h2>
+            <div className="space-y-2">
+              {credits.map((credit) => {
+                const selected = selectedCreditIds.includes(credit.id)
+                const { disabled, reason } = creditDisabled(credit)
+                return (
+                  <button
+                    key={credit.id}
+                    type="button"
+                    onClick={() => toggleCredit(credit)}
+                    disabled={disabled && !selected}
+                    className={`w-full flex items-center justify-between p-3 rounded-xl border text-left transition ${
+                      selected
+                        ? 'border-amber-400 bg-amber-50'
+                        : disabled
+                        ? 'border-gray-100 bg-gray-50 opacity-50 cursor-not-allowed'
+                        : 'border-gray-100 hover:border-amber-200 cursor-pointer'
+                    }`}
+                  >
+                    <div className="flex items-center gap-2">
+                      <span className={`w-4 h-4 rounded-full border-2 flex-shrink-0 ${selected ? 'border-amber-500 bg-amber-500' : 'border-gray-300'}`} />
+                      <div>
+                        <p className="text-sm font-medium text-gray-800">{CREDIT_LABELS[credit.type]} — NT${credit.amount} 折抵</p>
+                        <p className="text-xs text-gray-400">{formatExpiry(credit.expires_at)}{reason && ` · ${reason}`}</p>
+                      </div>
+                    </div>
+                    {selected && <span className="text-amber-600 font-bold text-sm">-NT${credit.amount}</span>}
+                  </button>
+                )
+              })}
+            </div>
+          </div>
+        )}
+
         {/* 訂單摘要 */}
         <div className="bg-white rounded-2xl p-4 shadow-sm border border-gray-100">
           <h2 className="font-bold text-gray-700 mb-3">訂單摘要</h2>
@@ -170,6 +328,12 @@ export default function CheckoutPage() {
                 <Link href="/products" className="text-xs font-medium text-amber-600 hover:text-amber-700 underline underline-offset-2 whitespace-nowrap ml-3">
                   繼續選購 →
                 </Link>
+              </div>
+            )}
+            {creditDiscount > 0 && (
+              <div className="flex justify-between text-sm text-green-600">
+                <span>點數折抵</span>
+                <span>-NT${creditDiscount}</span>
               </div>
             )}
             <div className="flex justify-between font-bold text-gray-800 pt-1 border-t border-gray-100">
