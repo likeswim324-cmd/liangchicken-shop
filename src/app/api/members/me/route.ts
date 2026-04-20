@@ -14,6 +14,7 @@ async function issueCredit(line_user_id: string, type: string, amount: number, d
   })
 }
 
+// line_user_id 可以是 LINE userId 或 Supabase Auth user UUID
 export async function GET(req: Request) {
   const lineUserId = new URL(req.url).searchParams.get('line_user_id')
   if (!lineUserId || !SUPABASE_URL || !SUPABASE_KEY) return NextResponse.json({ member: null })

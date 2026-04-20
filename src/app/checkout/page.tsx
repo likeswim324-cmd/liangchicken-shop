@@ -4,6 +4,7 @@ import { useCartStore } from '@/store/cart'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { useLiff } from '@/lib/useLiff'
+import { useAuth } from '@/lib/useAuth'
 
 type PaymentMethod = 'linepay' | 'credit' | 'atm' | 'cod'
 type Credit = { id: string; type: 'welcome' | 'birthday' | 'referral'; amount: number; expires_at: string }
@@ -45,6 +46,9 @@ export default function CheckoutPage() {
   const { items, totalPrice, clearCart } = useCartStore()
   const router = useRouter()
   const { profile } = useLiff()
+  const { user, displayName: authDisplayName } = useAuth()
+  // 統一 member ID：優先用 Supabase Auth user ID，其次用 LINE userId
+  const memberId = user?.id ?? profile?.userId ?? null
 
   const [payment, setPayment] = useState<PaymentMethod>('linepay')
   const [form, setForm] = useState({ name: '', phone: '', address: '', note: '' })
@@ -70,33 +74,35 @@ export default function CheckoutPage() {
     if (stored) setReferralCode(stored)
   }, [])
 
-  // LINE 名字帶入姓名欄
+  // 帶入姓名欄：優先 Supabase Auth 名字，其次 LINE 名字
   useEffect(() => {
-    if (profile?.displayName && !form.name) {
-      setForm(f => ({ ...f, name: profile.displayName }))
+    const name = authDisplayName ?? profile?.displayName
+    if (name && !form.name) {
+      setForm(f => ({ ...f, name }))
     }
-  }, [profile])
+  }, [profile, authDisplayName])
 
-  // 取得 / 建立會員資料
+  // 取得 / 建立會員資料（Supabase Auth 或 LIFF 皆支援）
   useEffect(() => {
-    if (!profile?.userId) return
+    if (!memberId) return
+    const displayName = authDisplayName ?? profile?.displayName ?? ''
     fetch('/api/members/me', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        line_user_id: profile.userId,
-        display_name: profile.displayName,
+        line_user_id: memberId,
+        display_name: displayName,
         referred_by_code: referralCode || undefined,
       }),
     })
       .then(r => r.json())
       .then(data => {
         if (data.is_new) setIsNewMember(true)
-        return fetch(`/api/members/credits?line_user_id=${profile.userId}`)
+        return fetch(`/api/members/credits?line_user_id=${memberId}`)
       })
       .then(r => r.json())
       .then(data => setCredits(data.credits ?? []))
-  }, [profile])
+  }, [memberId])
 
   if (hydrated && items.length === 0) {
     router.replace('/products')
@@ -149,11 +155,11 @@ export default function CheckoutPage() {
     setLoading(true)
     try {
       // 若新會員有填生日，先更新
-      if (isNewMember && birthday && profile?.userId) {
+      if (isNewMember && birthday && memberId) {
         await fetch('/api/members/me', {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ line_user_id: profile.userId, birthday }),
+          body: JSON.stringify({ line_user_id: memberId, birthday }),
         })
       }
 
@@ -166,7 +172,7 @@ export default function CheckoutPage() {
           payment,
           shipping: 'frozen',
           total: grandTotal,
-          line_user_id: profile?.userId ?? undefined,
+          line_user_id: memberId ?? undefined,
           used_credit_ids: selectedCreditIds,
           credit_discount: creditDiscount,
         }),
