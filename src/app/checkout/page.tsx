@@ -1,8 +1,9 @@
 'use client'
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useCartStore } from '@/store/cart'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
+import { useLiff } from '@/lib/useLiff'
 
 type PaymentMethod = 'linepay' | 'credit' | 'atm' | 'cod'
 
@@ -27,9 +28,17 @@ function getEstimatedDelivery(): string {
 export default function CheckoutPage() {
   const { items, totalPrice, clearCart } = useCartStore()
   const router = useRouter()
+  const { profile } = useLiff()
   const [payment, setPayment] = useState<PaymentMethod>('linepay')
   const [form, setForm] = useState({ name: '', phone: '', address: '', note: '' })
   const [loading, setLoading] = useState(false)
+
+  // LINE 名字帶入姓名欄（只在欄位是空的時候）
+  useEffect(() => {
+    if (profile?.displayName && !form.name) {
+      setForm(f => ({ ...f, name: profile.displayName }))
+    }
+  }, [profile])
 
   if (items.length === 0) {
     router.replace('/products')
