@@ -7,7 +7,7 @@ export async function POST(req: Request) {
 
     for (const event of events) {
       if (event.source?.userId) {
-        console.log('LINE User ID:', event.source.userId)
+        console.log('FULL_LINE_USER_ID=' + event.source.userId)
         // 第一次收到後，把這個 ID 設為 LINE_OWNER_USER_ID 環境變數
       }
     }
