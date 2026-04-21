@@ -37,7 +37,7 @@ async function sendLineNotification(order: Order) {
   if (!accessToken) return
 
   const itemLines = order.items.map(i => {
-    const opts = i.selectedOptions ? Object.entries(i.selectedOptions).map(([k, v]) => `  ${k}：${v}`).join('\n') : ''
+    const opts = i.selectedOptions ? Object.entries(i.selectedOptions).filter(([k]) => k !== '份量').map(([k, v]) => `  ${k}：${v}`).join('\n') : ''
     return `・${i.name} x${i.quantity}${opts ? '\n' + opts : ''}`
   }).join('\n')
   const shippingLabel = order.shipping === 'frozen' ? '冷凍宅配' : order.shipping === 'fresh' ? '溫體宅配' : order.shipping
