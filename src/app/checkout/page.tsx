@@ -55,6 +55,7 @@ export default function CheckoutPage() {
   const [loading, setLoading] = useState(false)
 
   const [hydrated, setHydrated] = useState(false)
+  const [submitted, setSubmitted] = useState(false)
 
   // 會員相關
   const [isNewMember, setIsNewMember] = useState(false)
@@ -104,7 +105,7 @@ export default function CheckoutPage() {
       .then(data => setCredits(data.credits ?? []))
   }, [memberId])
 
-  if (hydrated && items.length === 0) {
+  if (hydrated && items.length === 0 && !submitted) {
     router.replace('/products')
     return null
   }
@@ -179,6 +180,7 @@ export default function CheckoutPage() {
       })
       const data = await res.json()
       if (data.ok) {
+        setSubmitted(true)
         clearCart()
         localStorage.removeItem('lc_ref')
         router.push(`/checkout/success?order=${data.orderId}`)
