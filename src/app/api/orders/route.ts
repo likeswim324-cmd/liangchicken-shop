@@ -18,6 +18,7 @@ async function sendLineNotification(order: Order) {
   const channelId = process.env.LINE_CHANNEL_ID
   const channelSecret = process.env.LINE_CHANNEL_SECRET
   const ownerUserId = process.env.LINE_OWNER_USER_ID
+  console.log('[LINE] channelId:', channelId ? 'OK' : 'MISSING', 'secret:', channelSecret ? 'OK' : 'MISSING', 'userId:', ownerUserId ?? 'MISSING')
   if (!channelId || !channelSecret || !ownerUserId) return
 
   // 取得 stateless channel access token
@@ -32,16 +33,18 @@ async function sendLineNotification(order: Order) {
   })
   const tokenData = await tokenRes.json()
   const accessToken = tokenData.access_token
+  console.log('[LINE] token:', accessToken ? 'OK' : 'FAILED', JSON.stringify(tokenData))
   if (!accessToken) return
 
   const itemLines = order.items.map(i => `・${i.name} x${i.quantity}`).join('\n')
   const message = `🛒 新訂單！${order.id}\n\n客戶：${order.customer.name}\n電話：${order.customer.phone}\n地址：${order.customer.address}\n\n${itemLines}\n\n金額：$${order.total}\n付款：${order.payment}`
 
-  await fetch('https://api.line.me/v2/bot/message/push', {
+  const pushRes = await fetch('https://api.line.me/v2/bot/message/push', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${accessToken}` },
     body: JSON.stringify({ to: ownerUserId, messages: [{ type: 'text', text: message }] }),
   })
+  console.log('[LINE] push result:', await pushRes.text())
 }
 
 // ── Supabase（線上環境）──────────────────────────────────────
