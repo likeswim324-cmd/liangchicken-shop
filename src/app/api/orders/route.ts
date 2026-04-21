@@ -36,8 +36,13 @@ async function sendLineNotification(order: Order) {
   console.log('[LINE] token:', accessToken ? 'OK' : 'FAILED', JSON.stringify(tokenData))
   if (!accessToken) return
 
-  const itemLines = order.items.map(i => `・${i.name} x${i.quantity}`).join('\n')
-  const message = `🛒 新訂單！${order.id}\n\n客戶：${order.customer.name}\n電話：${order.customer.phone}\n地址：${order.customer.address}\n\n${itemLines}\n\n金額：$${order.total}\n付款：${order.payment}`
+  const itemLines = order.items.map(i => {
+    const opts = i.selectedOptions ? Object.entries(i.selectedOptions).map(([k, v]) => `  ${k}：${v}`).join('\n') : ''
+    return `・${i.name} x${i.quantity}${opts ? '\n' + opts : ''}`
+  }).join('\n')
+  const shippingLabel = order.shipping === 'frozen' ? '冷凍宅配' : order.shipping === 'fresh' ? '溫體宅配' : order.shipping
+  const note = order.customer.note ? `\n備註：${order.customer.note}` : ''
+  const message = `🛒 新訂單！${order.id}\n\n👤 客戶：${order.customer.name}\n📞 電話：${order.customer.phone}\n📦 配送：${shippingLabel}\n🏠 地址：${order.customer.address}${note}\n\n${itemLines}\n\n💰 金額：$${order.total}\n💳 付款：${order.payment}`
 
   const pushRes = await fetch('https://api.line.me/v2/bot/message/push', {
     method: 'POST',
