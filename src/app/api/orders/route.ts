@@ -13,6 +13,37 @@ export type Order = {
   total: number
 }
 
+// ── LINE 通知 ─────────────────────────────────────────────────
+async function sendLineNotification(order: Order) {
+  const channelId = process.env.LINE_CHANNEL_ID
+  const channelSecret = process.env.LINE_CHANNEL_SECRET
+  const ownerUserId = process.env.LINE_OWNER_USER_ID
+  if (!channelId || !channelSecret || !ownerUserId) return
+
+  // 取得 stateless channel access token
+  const tokenRes = await fetch('https://api.line.me/oauth2/v3/token', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    body: new URLSearchParams({
+      grant_type: 'client_credentials',
+      client_id: channelId,
+      client_secret: channelSecret,
+    }),
+  })
+  const tokenData = await tokenRes.json()
+  const accessToken = tokenData.access_token
+  if (!accessToken) return
+
+  const itemLines = order.items.map(i => `・${i.name} x${i.quantity}`).join('\n')
+  const message = `🛒 新訂單！${order.id}\n\n客戶：${order.customer.name}\n電話：${order.customer.phone}\n地址：${order.customer.address}\n\n${itemLines}\n\n金額：$${order.total}\n付款：${order.payment}`
+
+  await fetch('https://api.line.me/v2/bot/message/push', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${accessToken}` },
+    body: JSON.stringify({ to: ownerUserId, messages: [{ type: 'text', text: message }] }),
+  })
+}
+
 // ── Supabase（線上環境）──────────────────────────────────────
 const SUPABASE_URL = process.env.SUPABASE_URL
 const SUPABASE_KEY = process.env.SUPABASE_ANON_KEY
@@ -136,6 +167,8 @@ export async function POST(req: Request) {
     orders.unshift(order)
     writeOrders(orders)
   }
+
+  await sendLineNotification(order).catch(() => {})
 
   return NextResponse.json({ ok: true, orderId })
 }
