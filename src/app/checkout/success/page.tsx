@@ -9,8 +9,9 @@ export default function SuccessPage({ searchParams }: { searchParams: { order?: 
         <p className="text-gray-400 text-sm mb-2">訂單編號：{searchParams.order}</p>
       )}
       <p className="text-gray-500 text-sm mb-8 leading-relaxed">
-        我們收到你的訂單了，<br />
-        小瑋會盡快安排出貨，當天送到你家！
+        我們收到你的訂單了！<br />
+        預計 3–4 個工作天內送達，<br />
+        出貨後會通知你。
       </p>
       <Link href="/products" className="inline-block bg-amber-600 text-white px-6 py-3 rounded-xl font-medium hover:bg-amber-700 transition">
         繼續選購
