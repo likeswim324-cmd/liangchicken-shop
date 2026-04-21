@@ -31,7 +31,8 @@ export default function LoginPage() {
 
   const handleLine = async () => {
     await supabase.auth.signInWithOAuth({
-      provider: 'line',
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      provider: 'line' as any,
       options: { redirectTo: `${SITE_URL}/auth/callback` },
     })
   }
