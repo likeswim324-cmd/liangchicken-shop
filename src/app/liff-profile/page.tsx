@@ -1,12 +1,6 @@
 'use client'
 import { useEffect, useState } from 'react'
 
-declare global {
-  interface Window {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    liff: any
-  }
-}
 
 export default function LiffProfilePage() {
   const [userId, setUserId] = useState('')

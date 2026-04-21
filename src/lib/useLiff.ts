@@ -45,6 +45,7 @@ declare global {
     liff: {
       init: (config: { liffId: string }) => Promise<void>
       isLoggedIn: () => boolean
+      login: () => void
       getProfile: () => Promise<LiffProfile>
     }
   }
