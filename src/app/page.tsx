@@ -58,6 +58,42 @@ export default function HomePage() {
         </div>
       </section>
 
+      {/* 配送說明 */}
+      <section className="bg-amber-50 border-b border-amber-100">
+        <div className="max-w-5xl mx-auto px-6 py-12">
+          <p className="text-amber-600 text-xs tracking-widest uppercase mb-2 text-center">配送資訊</p>
+          <h2 className="text-gray-900 text-2xl font-bold text-center mb-8">訂購 & 配送說明</h2>
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-6">
+            <div className="bg-white rounded-2xl p-6 shadow-sm">
+              <div className="text-3xl mb-3">🛒</div>
+              <div className="font-semibold text-gray-900 mb-1">截單時間</div>
+              <div className="text-gray-500 text-sm leading-relaxed">
+                每日晚上 10 點截單<br />
+                週日、週一不出貨<br />（遇假日順延）
+              </div>
+            </div>
+            <div className="bg-white rounded-2xl p-6 shadow-sm">
+              <div className="text-3xl mb-3">🚚</div>
+              <div className="font-semibold text-gray-900 mb-1">到貨時間</div>
+              <div className="text-gray-500 text-sm leading-relaxed">
+                下單後約 3–4 天到貨<br />
+                黑貓宅急便 / 7-11 店到店<br />
+                全台灣配送
+              </div>
+            </div>
+            <div className="bg-white rounded-2xl p-6 shadow-sm">
+              <div className="text-3xl mb-3">💰</div>
+              <div className="font-semibold text-gray-900 mb-1">運費說明</div>
+              <div className="text-gray-500 text-sm leading-relaxed">
+                滿 2,000 元免運費<br />
+                單筆訂單需滿 2,000 元<br />
+                才可完成結帳
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
       {/* 精選商品 */}
       <section className="max-w-5xl mx-auto px-6 py-16">
         <div className="flex items-end justify-between mb-8">
