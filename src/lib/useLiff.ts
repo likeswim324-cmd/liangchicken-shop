@@ -9,31 +9,53 @@ type LiffProfile = {
   userId: string
 }
 
+// Module-level cache — LIFF must only be initialized once per session
+let _initPromise: Promise<LiffProfile | null> | null = null
+
+function getLiffProfile(): Promise<LiffProfile | null> {
+  if (_initPromise) return _initPromise
+
+  _initPromise = new Promise<LiffProfile | null>((resolve) => {
+    if (!LIFF_ID) { resolve(null); return }
+
+    const doInit = async () => {
+      try {
+        await window.liff.init({ liffId: LIFF_ID })
+        if (window.liff.isLoggedIn()) {
+          const p = await window.liff.getProfile()
+          resolve(p)
+        } else {
+          resolve(null)
+        }
+      } catch (e) {
+        console.warn('LIFF init failed', e)
+        resolve(null)
+      }
+    }
+
+    if (window.liff) {
+      doInit()
+    } else {
+      const script = document.createElement('script')
+      script.src = 'https://static.line-scdn.net/liff/edge/2/sdk.js'
+      script.onload = () => doInit()
+      script.onerror = () => resolve(null)
+      document.head.appendChild(script)
+    }
+  })
+
+  return _initPromise
+}
+
 export function useLiff() {
   const [profile, setProfile] = useState<LiffProfile | null>(null)
   const [ready, setReady] = useState(false)
 
   useEffect(() => {
-    if (!LIFF_ID) { setReady(true); return }
-
-    // 動態載入 LIFF SDK（避免 SSR 報錯）
-    const script = document.createElement('script')
-    script.src = 'https://static.line-scdn.net/liff/edge/2/sdk.js'
-    script.onload = async () => {
-      try {
-        await window.liff.init({ liffId: LIFF_ID })
-        if (window.liff.isLoggedIn()) {
-          const p = await window.liff.getProfile()
-          setProfile(p)
-        }
-      } catch (e) {
-        console.warn('LIFF init failed', e)
-      } finally {
-        setReady(true)
-      }
-    }
-    script.onerror = () => setReady(true)
-    document.head.appendChild(script)
+    getLiffProfile().then((p) => {
+      setProfile(p)
+      setReady(true)
+    })
   }, [])
 
   return { profile, ready }
