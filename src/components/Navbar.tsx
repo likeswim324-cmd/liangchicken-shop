@@ -3,6 +3,7 @@ import Link from 'next/link'
 import { ShoppingCart, LogIn, LogOut, User } from 'lucide-react'
 import { useCartStore } from '@/store/cart'
 import { useAuth } from '@/lib/useAuth'
+import { useLiff } from '@/lib/useLiff'
 import { supabase } from '@/lib/supabase-browser'
 import { useEffect, useState } from 'react'
 
@@ -11,6 +12,9 @@ export default function Navbar() {
   const { user, displayName } = useAuth()
   const [mounted, setMounted] = useState(false)
   useEffect(() => setMounted(true), [])
+  // 在 Navbar 初始化 LIFF，確保 auth 在第一頁就完成並快取，
+  // 避免在 checkout 頁才觸發 liff.init() redirect
+  useLiff()
 
   const handleLogout = async () => {
     await supabase.auth.signOut()
@@ -30,10 +34,10 @@ export default function Navbar() {
           {mounted && (
             user ? (
               <div className="flex items-center gap-2">
-                <div className="flex items-center gap-1.5 text-sm text-gray-600">
+                <Link href="/member" className="flex items-center gap-1.5 text-sm text-gray-600 hover:text-amber-700 transition">
                   <User className="w-4 h-4" />
                   <span className="max-w-[80px] truncate">{displayName}</span>
-                </div>
+                </Link>
                 <button
                   onClick={handleLogout}
                   className="text-gray-400 hover:text-red-400 transition"
