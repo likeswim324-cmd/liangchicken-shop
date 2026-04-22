@@ -11,6 +11,8 @@ export type CartItem = {
 
 type CartStore = {
   items: CartItem[]
+  _hasHydrated: boolean
+  setHasHydrated: (v: boolean) => void
   addItem: (product: Product, selectedOptions: Record<string, string>) => void
   removeItem: (cartKey: string) => void
   updateQuantity: (cartKey: string, quantity: number) => void
@@ -27,6 +29,8 @@ export const useCartStore = create<CartStore>()(
   persist(
     (set, get) => ({
       items: [],
+      _hasHydrated: false,
+      setHasHydrated: (v) => set({ _hasHydrated: v }),
       addItem: (product, selectedOptions) => {
         const cartKey = makeCartKey(product.id, selectedOptions)
         const items = get().items
@@ -49,6 +53,9 @@ export const useCartStore = create<CartStore>()(
       totalItems: () => get().items.reduce((sum, i) => sum + i.quantity, 0),
       totalPrice: () => get().items.reduce((sum, i) => sum + i.product.price * i.quantity, 0),
     }),
-    { name: 'liangchicken-cart' }
+    {
+      name: 'liangchicken-cart',
+      onRehydrateStorage: () => (state) => { state?.setHasHydrated(true) },
+    }
   )
 )

@@ -54,7 +54,7 @@ export default function CheckoutPage() {
   const [form, setForm] = useState({ name: '', phone: '', address: '', note: '' })
   const [loading, setLoading] = useState(false)
 
-  const [cartReady, setCartReady] = useState(false)
+  const cartReady = useCartStore(s => s._hasHydrated)
   const [submitted, setSubmitted] = useState(false)
 
   // 會員相關
@@ -68,16 +68,6 @@ export default function CheckoutPage() {
   const [couponCode, setCouponCode] = useState('')
   const [couponLoading, setCouponLoading] = useState(false)
   const [couponResult, setCouponResult] = useState<{ valid: boolean; discount: number; coupon_id: string; error?: string } | null>(null)
-
-  // 等 Zustand persist 從 localStorage 水合完成再檢查購物車是否為空
-  useEffect(() => {
-    if (useCartStore.persist.hasHydrated()) {
-      setCartReady(true)
-    } else {
-      const unsub = useCartStore.persist.onFinishHydration(() => setCartReady(true))
-      return unsub
-    }
-  }, [])
 
   // 擷取推薦碼（從 URL 或 localStorage）
   useEffect(() => {
