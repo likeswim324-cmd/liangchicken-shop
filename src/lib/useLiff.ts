@@ -2,6 +2,7 @@
 import { useEffect, useState } from 'react'
 
 const LIFF_ID = process.env.NEXT_PUBLIC_LIFF_ID ?? ''
+const SESSION_KEY = 'lc_liff_profile'
 
 type LiffProfile = {
   displayName: string
@@ -9,7 +10,7 @@ type LiffProfile = {
   userId: string
 }
 
-// Module-level cache — LIFF must only be initialized once per session
+// Module-level cache for current JS context
 let _initPromise: Promise<LiffProfile | null> | null = null
 
 function getLiffProfile(): Promise<LiffProfile | null> {
@@ -18,11 +19,22 @@ function getLiffProfile(): Promise<LiffProfile | null> {
   _initPromise = new Promise<LiffProfile | null>((resolve) => {
     if (!LIFF_ID) { resolve(null); return }
 
+    // If we already have the profile in sessionStorage, skip liff.init() entirely
+    // This prevents repeated LIFF auth redirects on full page reloads in LINE's WebView
+    try {
+      const cached = sessionStorage.getItem(SESSION_KEY)
+      if (cached) {
+        resolve(JSON.parse(cached))
+        return
+      }
+    } catch {}
+
     const doInit = async () => {
       try {
         await window.liff.init({ liffId: LIFF_ID })
         if (window.liff.isLoggedIn()) {
           const p = await window.liff.getProfile()
+          try { sessionStorage.setItem(SESSION_KEY, JSON.stringify(p)) } catch {}
           resolve(p)
         } else {
           resolve(null)
@@ -48,10 +60,21 @@ function getLiffProfile(): Promise<LiffProfile | null> {
 }
 
 export function useLiff() {
-  const [profile, setProfile] = useState<LiffProfile | null>(null)
-  const [ready, setReady] = useState(false)
+  // Pre-populate from sessionStorage to avoid flicker on page reload
+  const [profile, setProfile] = useState<LiffProfile | null>(() => {
+    if (typeof window === 'undefined') return null
+    try {
+      const cached = sessionStorage.getItem(SESSION_KEY)
+      return cached ? JSON.parse(cached) : null
+    } catch { return null }
+  })
+  const [ready, setReady] = useState(() => {
+    if (typeof window === 'undefined') return false
+    try { return !!sessionStorage.getItem(SESSION_KEY) } catch { return false }
+  })
 
   useEffect(() => {
+    if (ready) return // Already have profile from sessionStorage
     getLiffProfile().then((p) => {
       setProfile(p)
       setReady(true)
