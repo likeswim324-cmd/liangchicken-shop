@@ -54,7 +54,7 @@ export default function CheckoutPage() {
   const [form, setForm] = useState({ name: '', phone: '', address: '', note: '' })
   const [loading, setLoading] = useState(false)
 
-  const [hydrated, setHydrated] = useState(false)
+  const [cartReady, setCartReady] = useState(false)
   const [submitted, setSubmitted] = useState(false)
 
   // 會員相關
@@ -64,7 +64,20 @@ export default function CheckoutPage() {
   const [credits, setCredits] = useState<Credit[]>([])
   const [selectedCreditIds, setSelectedCreditIds] = useState<string[]>([])
 
-  useEffect(() => { setHydrated(true) }, [])
+  // 優惠碼
+  const [couponCode, setCouponCode] = useState('')
+  const [couponLoading, setCouponLoading] = useState(false)
+  const [couponResult, setCouponResult] = useState<{ valid: boolean; discount: number; coupon_id: string; error?: string } | null>(null)
+
+  // 等 Zustand persist 從 localStorage 水合完成再檢查購物車是否為空
+  useEffect(() => {
+    if (useCartStore.persist.hasHydrated()) {
+      setCartReady(true)
+    } else {
+      const unsub = useCartStore.persist.onFinishHydration(() => setCartReady(true))
+      return unsub
+    }
+  }, [])
 
   // 擷取推薦碼（從 URL 或 localStorage）
   useEffect(() => {
@@ -105,11 +118,11 @@ export default function CheckoutPage() {
       .then(data => setCredits(data.credits ?? []))
   }, [memberId])
 
-  if (hydrated && items.length === 0 && !submitted) {
+  if (!cartReady) return null
+  if (cartReady && items.length === 0 && !submitted) {
     router.replace('/products')
     return null
   }
-  if (!hydrated) return null
 
   const subtotal = totalPrice()
   const freeShip = subtotal >= FREE_SHIPPING
@@ -121,7 +134,22 @@ export default function CheckoutPage() {
   const creditDiscount = credits
     .filter(c => selectedCreditIds.includes(c.id))
     .reduce((sum, c) => sum + c.amount, 0)
-  const grandTotal = Math.max(0, baseTotal - creditDiscount)
+  const couponDiscount = couponResult?.valid ? (couponResult.discount ?? 0) : 0
+  const grandTotal = Math.max(0, baseTotal - creditDiscount - couponDiscount)
+
+  const applyCoupon = async () => {
+    if (!couponCode.trim()) return
+    setCouponLoading(true)
+    setCouponResult(null)
+    const res = await fetch('/api/coupons/validate', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ code: couponCode.trim(), order_total: baseTotal, user_id: memberId ?? undefined }),
+    })
+    const data = await res.json()
+    setCouponResult(data)
+    setCouponLoading(false)
+  }
 
   // 點數選擇邏輯
   function toggleCredit(credit: Credit) {
@@ -176,6 +204,8 @@ export default function CheckoutPage() {
           line_user_id: memberId ?? undefined,
           used_credit_ids: selectedCreditIds,
           credit_discount: creditDiscount,
+          coupon_id: couponResult?.valid ? couponResult.coupon_id : undefined,
+          coupon_discount: couponDiscount,
         }),
       })
       const data = await res.json()
@@ -211,7 +241,7 @@ export default function CheckoutPage() {
                 placeholder={placeholder}
                 value={form[key as keyof typeof form]}
                 onChange={(e) => setForm({ ...form, [key]: e.target.value })}
-                className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:border-amber-400"
+                className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:border-amber-400 text-gray-900"
               />
             </div>
           ))}
@@ -235,7 +265,7 @@ export default function CheckoutPage() {
                 type="date"
                 value={birthday}
                 onChange={(e) => setBirthday(e.target.value)}
-                className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:border-amber-400"
+                className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:border-amber-400 text-gray-900"
               />
             </div>
           )}
@@ -349,11 +379,44 @@ export default function CheckoutPage() {
                 <span>-NT${creditDiscount}</span>
               </div>
             )}
+            {couponDiscount > 0 && (
+              <div className="flex justify-between text-sm text-green-600">
+                <span>優惠碼折抵</span>
+                <span>-NT${couponDiscount}</span>
+              </div>
+            )}
             <div className="flex justify-between font-bold text-gray-800 pt-1 border-t border-gray-100">
               <span>總計</span>
               <span className="text-amber-700">NT${grandTotal}</span>
             </div>
           </div>
+        </div>
+
+        {/* 優惠碼 */}
+        <div className="bg-white rounded-2xl p-4 shadow-sm border border-gray-100">
+          <h2 className="font-bold text-gray-700 mb-3">優惠碼</h2>
+          <div className="flex gap-2">
+            <input
+              type="text"
+              placeholder="輸入優惠碼"
+              value={couponCode}
+              onChange={e => { setCouponCode(e.target.value.toUpperCase()); setCouponResult(null) }}
+              className="flex-1 border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:border-amber-400 uppercase"
+            />
+            <button
+              type="button"
+              onClick={applyCoupon}
+              disabled={couponLoading || !couponCode.trim()}
+              className="px-4 py-2.5 bg-amber-600 hover:bg-amber-700 disabled:bg-amber-300 text-white text-sm font-medium rounded-xl transition"
+            >
+              {couponLoading ? '確認中...' : '套用'}
+            </button>
+          </div>
+          {couponResult && (
+            <p className={`text-sm mt-2 ${couponResult.valid ? 'text-green-600' : 'text-red-500'}`}>
+              {couponResult.valid ? `優惠碼套用成功，折抵 NT$${couponResult.discount}` : couponResult.error}
+            </p>
+          )}
         </div>
 
         <button
