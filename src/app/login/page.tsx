@@ -29,12 +29,15 @@ export default function LoginPage() {
     })
   }
 
-  const handleLine = async () => {
-    await supabase.auth.signInWithOAuth({
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      provider: 'line' as any,
-      options: { redirectTo: `${SITE_URL}/auth/callback` },
+  const handleLine = () => {
+    const params = new URLSearchParams({
+      response_type: 'code',
+      client_id: '1655880057',
+      redirect_uri: `${SITE_URL}/api/auth/line/callback`,
+      state: Math.random().toString(36).slice(2),
+      scope: 'profile openid',
     })
+    window.location.href = `https://access.line.me/oauth2/v2.1/authorize?${params}`
   }
 
   const handleEmail = async (e: React.FormEvent) => {

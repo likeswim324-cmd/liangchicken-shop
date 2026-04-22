@@ -4,6 +4,7 @@ import LogoutButton from './LogoutButton'
 const navItems = [
   { href: '/admin/orders', label: '訂單' },
   { href: '/admin/products', label: '商品' },
+  { href: '/admin/coupons', label: '優惠碼' },
   { href: '/admin/settings', label: '設定' },
 ]
 

@@ -170,6 +170,24 @@ export async function POST(req: Request) {
     if (body.line_user_id) {
       await handleMemberCredits(body.line_user_id, orderId, body.used_credit_ids ?? [])
     }
+    if (body.coupon_id) {
+      const cRes = await fetch(`${SUPABASE_URL}/rest/v1/coupons?id=eq.${body.coupon_id}&select=used_count`, { headers: sbHeaders() })
+      const cRows = await cRes.json()
+      if (cRows[0]) {
+        await fetch(`${SUPABASE_URL}/rest/v1/coupons?id=eq.${body.coupon_id}`, {
+          method: 'PATCH',
+          headers: { ...sbHeaders(), Prefer: 'return=minimal' },
+          body: JSON.stringify({ used_count: (cRows[0].used_count ?? 0) + 1 }),
+        })
+      }
+      if (body.line_user_id) {
+        await fetch(`${SUPABASE_URL}/rest/v1/coupon_uses`, {
+          method: 'POST',
+          headers: { ...sbHeaders(), Prefer: 'return=minimal' },
+          body: JSON.stringify({ coupon_id: body.coupon_id, user_id: body.line_user_id }),
+        })
+      }
+    }
   } else {
     const orders = readOrders()
     orders.unshift(order)
